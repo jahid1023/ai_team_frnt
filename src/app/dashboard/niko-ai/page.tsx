@@ -1,10 +1,9 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useRef, useEffect } from "react"
-import { UserButton } from "@clerk/nextjs"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { UserButton } from "@clerk/nextjs"
 import { Home } from "lucide-react"
 
 interface Message {
@@ -19,20 +18,29 @@ interface Chat {
   title: string
 }
 
-export default function LaraAI() {
+export default function NikoAI() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [useMemory, setUseMemory] = useState(true)
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [currentChatId, setCurrentChatId] = useState("default")
   const [chats, setChats] = useState<{ [key: string]: Chat }>({})
-  const [useMemory, setUseMemory] = useState(true)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const CURRENT_NAMESPACE = useRef<string>("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/59483f3b-8c59-4381-b94b-9c80a69b8196/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/b7e1d215-fd19-4404-88ce-b6a8d13db9ad/chat?action=sendMessage"
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   useEffect(() => {
     const generateUUID = () => {
@@ -50,19 +58,18 @@ export default function LaraAI() {
     }
     CURRENT_NAMESPACE.current = ns
 
-    const savedChats = localStorage.getItem("lara-ai-chats")
-    const parsedChats = savedChats ? JSON.parse(savedChats) : {}
-    setChats(parsedChats)
-
-    const savedSidebarVisible = localStorage.getItem("lara-ai-sidebar-visible")
+    const savedSidebarVisible = localStorage.getItem("niko-ai-sidebar-visible")
     if (savedSidebarVisible !== null) {
       setSidebarVisible(savedSidebarVisible !== "false")
     }
 
-    const savedUseMemory = localStorage.getItem("lara-ai-use-memory")
+    const savedUseMemory = localStorage.getItem("niko-ai-use-memory")
     if (savedUseMemory !== null) {
       setUseMemory(savedUseMemory !== "false")
     }
+
+    const parsedChats = JSON.parse(localStorage.getItem("niko-ai-chats") || "{}")
+    setChats(parsedChats)
 
     if (Object.keys(parsedChats).length > 0) {
       const sortedChats = (Object.entries(parsedChats) as [string, Chat][]).sort(
@@ -76,36 +83,41 @@ export default function LaraAI() {
     }
   }, [])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
-
-  useEffect(() => {
-    localStorage.setItem("lara-ai-sidebar-visible", String(sidebarVisible))
-  }, [sidebarVisible])
-
-  useEffect(() => {
-    localStorage.setItem("lara-ai-use-memory", String(useMemory))
-  }, [useMemory])
-
   const createInitialMessage = () => {
-    setMessages([
-      {
-        text: "Ciao, sono Lara AI, un Social Media Manager virtuale, perfetta per gestire e automatizzare la creazione dei tuoi contenuti sui social media. Come posso supportarti oggi?",
-        sender: "ai",
-        time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
-      },
-    ])
+    const initialMessage: Message = {
+      text: "Ciao, sono Niko AI. Il tuo SEO Strategist virtuale, progettato per sviluppare una strategia SEO a lungo termine e migliorare la tua presenza online. Come posso supportarti oggi?",
+      sender: "ai",
+      time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+    }
+    setMessages([initialMessage])
   }
 
-  const saveChat = (newTitle?: string) => {
+  const formatMessageText = (text: string) => {
+    let formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+    formatted = formatted.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    formatted = formatted.replace(/\*(.+?)\*/g, "<em>$1</em>")
+    formatted = formatted.replace(
+      /`([^`]+?)`/g,
+      '<code style="background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>',
+    )
+    formatted = formatted.replace(
+      /\[([^\]]+?)\]$$(https?:\/\/[^\s)]+)$$/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #235E84; text-decoration: underline;">$1</a>',
+    )
+    formatted = formatted.replace(/\n/g, "<br>")
+
+    return formatted
+  }
+
+  const saveChat = (newTitle: string | null = null) => {
     if (messages.length === 0) return
 
     let title = newTitle || chats[currentChatId]?.title || "Nuova Conversazione"
     if (!newTitle) {
-      const firstUser = messages.find((m) => m.sender === "user")
-      if (firstUser) {
-        title = firstUser.text.slice(0, 40)
+      const firstUserMessage = messages.find((m) => m.sender === "user")
+      if (firstUserMessage) {
+        title = firstUserMessage.text.slice(0, 40)
       }
     }
 
@@ -117,65 +129,16 @@ export default function LaraAI() {
         title,
       },
     }
+
     setChats(updatedChats)
-    localStorage.setItem("lara-ai-chats", JSON.stringify(updatedChats))
-  }
-
-  const loadChat = (chatId: string) => {
-    setCurrentChatId(chatId)
-    const chat = chats[chatId]
-    if (chat) {
-      setMessages(chat.messages || [])
-    }
-  }
-
-  const deleteChat = (chatId: string, event: React.MouseEvent) => {
-    event.stopPropagation()
-    if (!confirm("Sei sicuro di voler eliminare questa conversazione?")) return
-
-    const updatedChats = { ...chats }
-    delete updatedChats[chatId]
-    setChats(updatedChats)
-    localStorage.setItem("lara-ai-chats", JSON.stringify(updatedChats))
-
-    if (chatId === currentChatId) {
-      const remaining = Object.keys(updatedChats)
-      if (remaining.length > 0) {
-        loadChat(remaining[0])
-      } else {
-        createNewChat()
-      }
-    }
-  }
-
-  const createNewChat = () => {
-    const newChatId = "chat_" + Date.now()
-    setCurrentChatId(newChatId)
-    localStorage.setItem("lara-ai-session-id", newChatId)
-    createInitialMessage()
-  }
-
-  const formatMessageText = (text: string): string => {
-    let t = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    t = t.replace(/\*(.+?)\*/g, "<em>$1</em>")
-    t = t.replace(
-      /`([^`]+?)`/g,
-      '<code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:0.9em;">$1</code>',
-    )
-    t = t.replace(
-      /\[([^\]]+?)\]$$(https?:\/\/[^\s)]+)$$/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#235E84;text-decoration:underline;">$1</a>',
-    )
-    t = t.replace(/\n/g, "<br>")
-    return t
+    localStorage.setItem("niko-ai-chats", JSON.stringify(updatedChats))
   }
 
   const sendMessage = async () => {
     if (!inputValue.trim() || isLoading) return
 
     const userMessage: Message = {
-      text: inputValue.trim(),
+      text: inputValue,
       sender: "user",
       time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
     }
@@ -192,8 +155,8 @@ export default function LaraAI() {
     setMessages((prev) => [...prev, thinkingMessage])
 
     try {
-      const sessionId = localStorage.getItem("lara-ai-session-id") || `session_${Date.now()}`
-      localStorage.setItem("lara-ai-session-id", sessionId)
+      const sessionId = localStorage.getItem("niko-ai-session-id") || `session_${Date.now()}`
+      localStorage.setItem("niko-ai-session-id", sessionId)
 
       const response = await fetch(N8N_ENDPOINT, {
         method: "POST",
@@ -202,41 +165,50 @@ export default function LaraAI() {
           Accept: "text/event-stream",
         },
         body: JSON.stringify({
-          chatInput: userMessage.text,
+          chatInput: inputValue,
           sessionId: sessionId,
           useMemory: useMemory,
-          metadata: { namespace: CURRENT_NAMESPACE.current, source: "lara-ai-chat" },
+          metadata: {
+            namespace: CURRENT_NAMESPACE.current,
+            source: "niko-ai-chat",
+          },
         }),
       })
 
-      if (!response.ok) throw new Error(`HTTP error ${response.status}`)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder("utf-8")
       let buffer = ""
       let accumulatedText = ""
       let streamMode: "sse" | "jsonl" | null = null
+      let isFirstChunk = true
       let generatedTitle: string | null = null
 
       const handleEvent = (jsonStr: string) => {
         try {
           const obj = JSON.parse(jsonStr)
           if (obj.type === "item" && typeof obj.content === "string") {
+            if (isFirstChunk) {
+              isFirstChunk = false
+            }
             accumulatedText += obj.content
             setMessages((prev) => {
-              const updated = [...prev]
-              const lastMsg = updated[updated.length - 1]
-              if (lastMsg && lastMsg.sender === "ai") {
-                lastMsg.text = accumulatedText
-                lastMsg.time = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
+              const newMessages = [...prev]
+              newMessages[newMessages.length - 1] = {
+                text: accumulatedText,
+                sender: "ai",
+                time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
               }
-              return updated
+              return newMessages
             })
           } else if (obj.type === "end" && obj.title) {
             generatedTitle = obj.title
           }
         } catch (e) {
-          // Ignore parsing errors
+          // Ignore parse errors
         }
       }
 
@@ -244,13 +216,18 @@ export default function LaraAI() {
         while (true) {
           const { value, done } = await reader.read()
           if (done) break
+
           buffer += decoder.decode(value, { stream: true })
 
           if (!streamMode) {
             const probe = buffer.trimStart()
-            if (probe.startsWith("data:")) streamMode = "sse"
-            else if (probe.startsWith("{") || probe.startsWith("[")) streamMode = "jsonl"
-            else streamMode = "jsonl"
+            if (probe.startsWith("data:")) {
+              streamMode = "sse"
+            } else if (probe.startsWith("{") || probe.startsWith("[")) {
+              streamMode = "jsonl"
+            } else {
+              streamMode = "jsonl"
+            }
           }
 
           if (streamMode === "sse") {
@@ -259,12 +236,13 @@ export default function LaraAI() {
               const eventBlock = buffer.slice(0, idx)
               buffer = buffer.slice(idx + 2)
               const dataLines = eventBlock.split("\n").filter((l) => l.startsWith("data:"))
-              if (!dataLines.length) continue
-              const jsonStr = dataLines
-                .map((l) => l.replace(/^data:\s?/, ""))
-                .join("\n")
-                .trim()
-              if (jsonStr) handleEvent(jsonStr)
+              if (dataLines.length > 0) {
+                const jsonStr = dataLines
+                  .map((l) => l.replace(/^data:\s?/, ""))
+                  .join("\n")
+                  .trim()
+                if (jsonStr) handleEvent(jsonStr)
+              }
             }
           } else {
             const lines = buffer.split(/\r?\n/)
@@ -280,7 +258,7 @@ export default function LaraAI() {
         if (leftover) {
           if (streamMode === "sse") {
             const dataLines = leftover.split("\n").filter((l) => l.startsWith("data:"))
-            if (dataLines.length) {
+            if (dataLines.length > 0) {
               const jsonStr = dataLines
                 .map((l) => l.replace(/^data:\s?/, ""))
                 .join("\n")
@@ -293,32 +271,64 @@ export default function LaraAI() {
         }
       }
 
-      setMessages((prev) => {
-        const updated = [...prev]
-        const lastMsg = updated[updated.length - 1]
-        if (lastMsg && lastMsg.sender === "ai") {
-          if (!lastMsg.text) {
-            lastMsg.text = "Mi dispiace, non ho ricevuto una risposta valida. Riprova per favore."
+      if (!accumulatedText) {
+        setMessages((prev) => {
+          const newMessages = [...prev]
+          newMessages[newMessages.length - 1] = {
+            text: "Mi dispiace, non ho ricevuto una risposta valida. Riprova per favore.",
+            sender: "ai",
+            time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
           }
-          lastMsg.time = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
-        }
-        return updated
-      })
+          return newMessages
+        })
+      }
 
-      setTimeout(() => saveChat(generatedTitle || undefined), 100)
+      setTimeout(() => saveChat(generatedTitle), 100)
     } catch (error) {
       console.error("Error sending message:", error)
       setMessages((prev) => {
-        const updated = [...prev]
-        const lastMsg = updated[updated.length - 1]
-        if (lastMsg && lastMsg.sender === "ai") {
-          lastMsg.text = "Errore di connessione. Riprova più tardi."
-          lastMsg.time = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
+        const newMessages = [...prev]
+        newMessages[newMessages.length - 1] = {
+          text: "Errore di connessione. Riprova più tardi.",
+          sender: "ai",
+          time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
         }
-        return updated
+        return newMessages
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const createNewChat = () => {
+    const newChatId = `chat_${Date.now()}`
+    setCurrentChatId(newChatId)
+    localStorage.setItem("niko-ai-session-id", newChatId)
+    createInitialMessage()
+  }
+
+  const loadChat = (chatId: string) => {
+    setCurrentChatId(chatId)
+    const chat = chats[chatId]
+    setMessages(chat.messages || [])
+  }
+
+  const deleteChat = (chatId: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    if (!confirm("Sei sicuro di voler eliminare questa conversazione?")) return
+
+    const updatedChats = { ...chats }
+    delete updatedChats[chatId]
+    setChats(updatedChats)
+    localStorage.setItem("niko-ai-chats", JSON.stringify(updatedChats))
+
+    if (chatId === currentChatId) {
+      const remainingChats = Object.keys(updatedChats)
+      if (remainingChats.length > 0) {
+        loadChat(remainingChats[0])
+      } else {
+        createNewChat()
+      }
     }
   }
 
@@ -329,11 +339,11 @@ export default function LaraAI() {
     }
   }
 
+  const monthNames = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
+
   const sortedChats = (Object.entries(chats) as [string, Chat][])
     .sort(([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
     .slice(0, 50)
-
-  const monthNames = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
 
   return (
     <>
@@ -348,100 +358,81 @@ export default function LaraAI() {
 
         body {
           font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          overflow: hidden;
         }
 
-        :root {
-          --background: #ffffff;
-          --foreground: #475569;
-          --card: #ffffff;
-          --card-foreground: #334155;
-          --primary: #235E84;
-          --primary-foreground: #ffffff;
-          --secondary: #E3F2FD;
-          --secondary-foreground: #235E84;
-          --muted: #f8fafc;
-          --muted-foreground: #64748b;
-          --accent: #235E84;
-          --sidebar: #ffffff;
-          --sidebar-foreground: #475569;
-          --sidebar-primary: #E3F2FD;
-          --sidebar-border: #e2e8f0;
-          --border: #e2e8f0;
-          --radius: 12px;
-        }
-
-        .app-container {
+        .niko-container {
           width: 100vw;
           height: 100vh;
           display: flex;
           overflow: hidden;
-          background: var(--background);
+          background: #ffffff;
         }
 
-        .sidebar {
+        .niko-sidebar {
           width: 320px;
           min-width: 320px;
-          background: var(--sidebar);
-          border-right: 1px solid var(--sidebar-border);
+          background: #ffffff;
+          border-right: 1px solid #e2e8f0;
           display: flex;
           flex-direction: column;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .sidebar.hidden {
+        .niko-sidebar.hidden {
           width: 0;
           min-width: 0;
           overflow: hidden;
           border-right: none;
         }
 
-        .sidebar-header {
+        .niko-sidebar-header {
           padding: 20px;
-          border-bottom: 1px solid var(--sidebar-border);
+          border-bottom: 1px solid #e2e8f0;
+          background: #ffffff;
         }
 
-        .brand-header {
+        .niko-brand-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           margin-bottom: 24px;
         }
 
-        .brand-section {
+        .niko-brand-section {
           display: flex;
           align-items: center;
           gap: 12px;
         }
 
-        .profile-avatar {
+        .niko-profile-avatar {
           width: 40px;
           height: 40px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0;
           overflow: hidden;
-          background: var(--primary);
+          background: #235E84;
         }
 
-        .profile-avatar img {
+        .niko-profile-avatar img {
           width: 100%;
           height: 100%;
           object-fit: cover;
         }
 
-        .brand-title {
+        .niko-brand-title {
           font-family: 'Montserrat', sans-serif;
           font-size: 20px;
           font-weight: 600;
-          color: var(--sidebar-foreground);
+          color: #475569;
         }
 
-        .new-chat-button {
-          background: var(--primary);
+        .niko-new-chat-btn {
+          background: #235E84;
           border: none;
-          color: var(--primary-foreground);
+          color: #ffffff;
           padding: 14px 20px;
           border-radius: 8px;
           cursor: pointer;
@@ -455,35 +446,35 @@ export default function LaraAI() {
           width: 100%;
         }
 
-        .new-chat-button:hover {
-          background: var(--accent);
+        .niko-new-chat-btn:hover {
+          background: #1e4f6f;
           transform: translateY(-1px);
         }
 
-        .memory-toggle-container {
+        .niko-memory-toggle {
           display: flex;
           align-items: center;
           justify-content: space-between;
           padding: 16px 0 0 0;
           font-size: 14px;
           font-weight: 500;
-          color: var(--sidebar-foreground);
+          color: #475569;
         }
 
-        .switch {
+        .niko-switch {
           position: relative;
           display: inline-block;
           width: 44px;
           height: 24px;
         }
 
-        .switch input {
+        .niko-switch input {
           opacity: 0;
           width: 0;
           height: 0;
         }
 
-        .slider {
+        .niko-slider {
           position: absolute;
           cursor: pointer;
           top: 0;
@@ -495,9 +486,9 @@ export default function LaraAI() {
           border-radius: 24px;
         }
 
-        .slider:before {
+        .niko-slider:before {
           position: absolute;
-          content: '';
+          content: "";
           height: 18px;
           width: 18px;
           left: 3px;
@@ -507,15 +498,15 @@ export default function LaraAI() {
           border-radius: 50%;
         }
 
-        input:checked + .slider {
-          background-color: var(--primary);
+        .niko-switch input:checked + .niko-slider {
+          background-color: #235E84;
         }
 
-        input:checked + .slider:before {
+        .niko-switch input:checked + .niko-slider:before {
           transform: translateX(20px);
         }
 
-        .sidebar-split-content {
+        .niko-sidebar-split {
           flex: 1;
           display: flex;
           flex-direction: column;
@@ -523,32 +514,14 @@ export default function LaraAI() {
           overflow: hidden;
         }
 
-        .chat-list-wrapper {
+        .niko-chat-list-wrapper {
           flex: 1 1 auto;
-          max-height: 40%;
           overflow-y: auto;
           padding: 16px 20px;
           min-height: 100px;
         }
 
-        .chat-list-wrapper::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .chat-list-wrapper::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .chat-list-wrapper::-webkit-scrollbar-thumb {
-          background: var(--sidebar-border);
-          border-radius: 3px;
-        }
-
-        .chat-list-wrapper::-webkit-scrollbar-thumb:hover {
-          background: var(--muted-foreground);
-        }
-
-        .chat-item {
+        .niko-chat-item {
           padding: 16px;
           border-radius: 8px;
           cursor: pointer;
@@ -560,32 +533,32 @@ export default function LaraAI() {
           align-items: center;
         }
 
-        .chat-item:hover {
-          background: var(--sidebar-primary);
+        .niko-chat-item:hover {
+          background: #E3F2FD;
         }
 
-        .chat-item.active {
-          background: var(--secondary);
-          color: var(--secondary-foreground);
+        .niko-chat-item.active {
+          background: #E3F2FD;
+          color: #235E84;
         }
 
-        .chat-item-content {
+        .niko-chat-item-content {
           flex: 1;
         }
 
-        .chat-item-title {
+        .niko-chat-item-title {
           font-weight: 500;
           font-size: 14px;
-          color: var(--sidebar-foreground);
+          color: #475569;
           margin-bottom: 4px;
         }
 
-        .chat-item-subtitle {
+        .niko-chat-item-subtitle {
           font-size: 12px;
-          color: var(--muted-foreground);
+          color: #64748b;
         }
 
-        .delete-chat-btn {
+        .niko-delete-btn {
           opacity: 0;
           background: #ef4444;
           border: none;
@@ -601,81 +574,61 @@ export default function LaraAI() {
           font-size: 12px;
         }
 
-        .chat-item:hover .delete-chat-btn {
+        .niko-chat-item:hover .niko-delete-btn {
           opacity: 1;
         }
 
-        .delete-chat-btn:hover {
+        .niko-delete-btn:hover {
           background: #dc2626;
         }
 
-        .agents-section {
+        .niko-agents-section {
           flex: 1 1 auto;
           min-height: 150px;
           margin-top: 0;
           padding: 16px 20px;
-          border-top: 1px solid var(--sidebar-border);
+          border-top: 1px solid #e2e8f0;
           display: flex;
           flex-direction: column;
-          overflow: hidden;
         }
 
-        .agents-title {
+        .niko-agents-title {
           font-family: 'Montserrat', sans-serif;
           font-size: 16px;
           font-weight: 600;
-          color: var(--sidebar-foreground);
+          color: #475569;
           margin-bottom: 16px;
-          padding: 0 4px;
           flex-shrink: 0;
         }
 
-        .agents-list {
+        .niko-agents-list {
           flex: 1;
           overflow-y: auto;
           display: flex;
           flex-direction: column;
           gap: 8px;
-          min-height: 0;
         }
 
-        .agents-list::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .agents-list::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .agents-list::-webkit-scrollbar-thumb {
-          background: var(--sidebar-border);
-          border-radius: 3px;
-        }
-
-        .agents-list::-webkit-scrollbar-thumb:hover {
-          background: var(--muted-foreground);
-        }
-
-        .agent-item {
+        .niko-agent-item {
           display: flex;
           align-items: center;
           gap: 12px;
           padding: 10px 12px;
           border-radius: 8px;
           text-decoration: none;
-          color: var(--sidebar-foreground);
+          color: #475569;
           transition: background-color 0.2s ease;
         }
 
-        .agent-item:hover {
-          background-color: var(--sidebar-primary);
+        .niko-agent-item:hover {
+          background-color: #E3F2FD;
         }
 
-        .agent-avatar {
+        .niko-agent-avatar {
           width: 32px;
           height: 32px;
           border-radius: 50%;
-          background: var(--muted);
+          background: #f8fafc;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -683,81 +636,98 @@ export default function LaraAI() {
           flex-shrink: 0;
         }
 
-        .agent-avatar img {
+        .niko-agent-avatar img {
           width: 100%;
           height: 100%;
           object-fit: cover;
         }
 
-        .agent-name {
+        .niko-agent-name {
           font-size: 14px;
           font-weight: 500;
         }
 
-        .chat-container {
+        .niko-chat-container {
           flex: 1;
           display: flex;
           flex-direction: column;
           min-width: 0;
-          background: var(--background);
+          background: #ffffff;
         }
 
-        .chat-header {
+        .niko-chat-header {
           background: #235E84;
           color: #ffffff;
           padding: 20px 40px;
-          border-bottom: 1px solid var(--border);
+          border-bottom: 1px solid #e2e8f0;
           display: flex;
           align-items: center;
           justify-content: space-between;
           min-height: 80px;
         }
 
-        .header-left {
+        .niko-header-left {
           display: flex;
           align-items: center;
           gap: 16px;
         }
 
-        .header-right {
+        .niko-header-right {
           display: flex;
           align-items: center;
           gap: 16px;
         }
 
-        .home-button {
+        .niko-home-btn {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          padding: 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          color: #ffffff;
+          transition: all 0.2s ease;
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          color: #ffffff;
-          transition: all 0.2s ease;
-          cursor: pointer;
+          text-decoration: none;
         }
 
-        .home-button:hover {
+        .niko-home-btn:hover {
           background: rgba(255, 255, 255, 0.2);
         }
 
-        .chat-title {
+        .niko-toggle-btn {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          padding: 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          color: #ffffff;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .niko-toggle-btn:hover {
+          background: rgba(255, 255, 255, 0.2);
+        }
+
+        .niko-chat-title {
           font-family: 'Montserrat', sans-serif;
           font-size: 20px;
           font-weight: 600;
           color: #ffffff;
         }
 
-        .chat-messages {
+        .niko-messages {
           flex: 1;
           overflow-y: auto;
           padding: 50px 80px;
-          background: var(--background);
+          background: #ffffff;
         }
 
-        .message {
+        .niko-message {
           margin-bottom: 32px;
           display: flex;
           align-items: flex-start;
@@ -777,12 +747,12 @@ export default function LaraAI() {
           }
         }
 
-        .message.user {
+        .niko-message.user {
           flex-direction: row-reverse;
           margin-left: auto;
         }
 
-        .message-avatar {
+        .niko-message-avatar {
           width: 40px;
           height: 40px;
           border-radius: 50%;
@@ -795,83 +765,81 @@ export default function LaraAI() {
           overflow: hidden;
         }
 
-        .message-avatar img {
+        .niko-message-avatar img {
           width: 100%;
           height: 100%;
           object-fit: cover;
         }
 
-        .message.ai .message-avatar {
-          background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-          color: var(--primary-foreground);
+        .niko-message.ai .niko-message-avatar {
+          background: linear-gradient(135deg, #235E84 0%, #235E84 100%);
+          color: #ffffff;
         }
 
-        .message.user .message-avatar {
-          background: var(--secondary);
-          color: var(--secondary-foreground);
+        .niko-message.user .niko-message-avatar {
+          background: #E3F2FD;
+          color: #235E84;
         }
 
-        .message-content {
+        .niko-message-content {
           flex: 1;
           background: #ffffff;
           padding: 20px 24px;
-          border-radius: var(--radius);
-          border: 1px solid var(--border);
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
           min-width: 200px;
         }
 
-        .message.user .message-content {
+        .niko-message.user .niko-message-content {
           background: #235E84;
           color: #ffffff;
           border-color: #235E84;
         }
 
-        .message-text {
-          color: var(--card-foreground);
+        .niko-message-text {
+          color: #334155;
           line-height: 1.6;
           font-size: 15px;
         }
 
-        .message.user .message-text {
+        .niko-message.user .niko-message-text {
           color: #ffffff;
         }
 
-        .message-time {
+        .niko-message-time {
           font-size: 12px;
-          color: var(--muted-foreground);
+          color: #64748b;
           margin-top: 8px;
         }
 
-        .message.user .message-time {
+        .niko-message.user .niko-message-time {
           color: rgba(255, 255, 255, 0.7);
         }
 
-        .thinking-dots {
+        .niko-thinking-dots {
           display: flex;
           align-items: center;
           gap: 5px;
         }
 
-        .thinking-dots .dot {
+        .niko-thinking-dots .dot {
           width: 8px;
           height: 8px;
-          background-color: var(--muted-foreground);
+          background-color: #64748b;
           border-radius: 50%;
           animation: typing 1.4s infinite ease-in-out both;
         }
 
-        .thinking-dots .dot:nth-child(2) {
+        .niko-thinking-dots .dot:nth-child(2) {
           animation-delay: 0.2s;
         }
 
-        .thinking-dots .dot:nth-child(3) {
+        .niko-thinking-dots .dot:nth-child(3) {
           animation-delay: 0.4s;
         }
 
         @keyframes typing {
-          0%,
-          60%,
-          100% {
+          0%, 60%, 100% {
             transform: translateY(0);
             opacity: 0.4;
           }
@@ -881,49 +849,49 @@ export default function LaraAI() {
           }
         }
 
-        .input-container {
+        .niko-input-container {
           padding: 30px 80px;
-          border-top: 1px solid var(--border);
-          background: var(--background);
+          border-top: 1px solid #e2e8f0;
+          background: #ffffff;
         }
 
-        .input-wrapper {
+        .niko-input-wrapper {
           display: flex;
           align-items: flex-end;
           gap: 12px;
-          background: var(--background);
-          border: 2px solid var(--border);
-          border-radius: var(--radius);
+          background: #ffffff;
+          border: 2px solid #e2e8f0;
+          border-radius: 12px;
           padding: 12px 16px;
           transition: all 0.2s ease;
         }
 
-        .input-wrapper:focus-within {
-          border-color: var(--primary);
+        .niko-input-wrapper:focus-within {
+          border-color: #235E84;
           box-shadow: 0 0 0 3px rgba(35, 94, 132, 0.1);
         }
 
-        .message-input {
+        .niko-input {
           flex: 1;
           border: none;
           outline: none;
           background: transparent;
           font-size: 15px;
-          color: var(--foreground);
+          color: #475569;
           resize: none;
           min-height: 24px;
           max-height: 120px;
-          font-family: inherit;
+          font-family: 'Open Sans', sans-serif;
         }
 
-        .message-input::placeholder {
-          color: var(--muted-foreground);
+        .niko-input::placeholder {
+          color: #64748b;
         }
 
-        .send-button {
-          background: var(--primary);
+        .niko-send-btn {
+          background: #235E84;
           border: none;
-          color: var(--primary-foreground);
+          color: #ffffff;
           width: 40px;
           height: 40px;
           border-radius: 50%;
@@ -935,184 +903,173 @@ export default function LaraAI() {
           flex-shrink: 0;
         }
 
-        .send-button:hover:not(:disabled) {
-          background: var(--accent);
+        .niko-send-btn:hover:not(:disabled) {
+          background: #1e4f6f;
           transform: scale(1.05);
         }
 
-        .send-button:disabled {
-          background: var(--muted);
-          color: var(--muted-foreground);
+        .niko-send-btn:disabled {
+          background: #f8fafc;
+          color: #64748b;
           cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+          .niko-messages {
+            padding: 20px;
+          }
+          .niko-input-container {
+            padding: 16px 20px;
+          }
+          .niko-message {
+            max-width: 95%;
+          }
         }
       `}</style>
 
-      <div className="app-container">
-        <div className={`sidebar ${!sidebarVisible ? "hidden" : ""}`}>
-          <div className="sidebar-header">
-            <div className="brand-header">
-              <div className="brand-section">
-                <div className="profile-avatar">
-                  <img
-                    src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png"
-                    alt="Lara AI"
-                  />
+      <div className="niko-container">
+        <div className={`niko-sidebar ${!sidebarVisible ? "hidden" : ""}`}>
+          <div className="niko-sidebar-header">
+            <div className="niko-brand-header">
+              <div className="niko-brand-section">
+                <div className="niko-profile-avatar">
+                  <img src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI.png" alt="Niko AI" />
                 </div>
-                <div className="brand-title">Lara AI</div>
+                <div className="niko-brand-title">Niko AI</div>
               </div>
             </div>
-            <button className="new-chat-button" onClick={createNewChat}>
+            <button className="niko-new-chat-btn" onClick={createNewChat}>
               <span>+</span> Nuova Chat
             </button>
-            <div className="memory-toggle-container">
+            <div className="niko-memory-toggle">
               <label htmlFor="memoryToggle">Usa Memoria</label>
-              <label className="switch">
+              <label className="niko-switch">
                 <input
                   type="checkbox"
                   id="memoryToggle"
                   checked={useMemory}
-                  onChange={(e) => setUseMemory(e.target.checked)}
+                  onChange={(e) => {
+                    setUseMemory(e.target.checked)
+                    localStorage.setItem("niko-ai-use-memory", String(e.target.checked))
+                  }}
                 />
-                <span className="slider"></span>
+                <span className="niko-slider"></span>
               </label>
             </div>
           </div>
 
-          <div className="sidebar-split-content">
-            <div className="chat-list-wrapper">
-              <div className="chat-list">
-                {sortedChats.map(([chatId, chat]) => {
-                  const dateObj = new Date(chat.lastUpdated)
-                  const dayNum = dateObj.getDate()
-                  const monthStr = monthNames[dateObj.getMonth()]
-                  const hourStr = String(dateObj.getHours()).padStart(2, "0")
-                  const minuteStr = String(dateObj.getMinutes()).padStart(2, "0")
-                  const formattedDate = `${dayNum} ${monthStr} h. ${hourStr}:${minuteStr}`
+          <div className="niko-sidebar-split">
+            <div className="niko-chat-list-wrapper">
+              {sortedChats.map(([id, chat]) => {
+                const dateObj = new Date(chat.lastUpdated)
+                const dayNum = dateObj.getDate()
+                const monthStr = monthNames[dateObj.getMonth()]
+                const hourStr = String(dateObj.getHours()).padStart(2, "0")
+                const minuteStr = String(dateObj.getMinutes()).padStart(2, "0")
+                const formattedDate = `${dayNum} ${monthStr} h. ${hourStr}:${minuteStr}`
 
-                  return (
-                    <div
-                      key={chatId}
-                      className={`chat-item ${chatId === currentChatId ? "active" : ""}`}
-                      onClick={() => loadChat(chatId)}
-                    >
-                      <div className="chat-item-content">
-                        <div className="chat-item-title">{chat.title || "Nuova Conversazione"}</div>
-                        <div className="chat-item-subtitle">{formattedDate}</div>
-                      </div>
-                      <button
-                        className="delete-chat-btn"
-                        onClick={(e) => deleteChat(chatId, e)}
-                        title="Elimina conversazione"
-                      >
-                        🗑
-                      </button>
+                return (
+                  <div
+                    key={id}
+                    className={`niko-chat-item ${id === currentChatId ? "active" : ""}`}
+                    onClick={() => loadChat(id)}
+                  >
+                    <div className="niko-chat-item-content">
+                      <div className="niko-chat-item-title">{chat.title || "Nuova Conversazione"}</div>
+                      <div className="niko-chat-item-subtitle">{formattedDate}</div>
                     </div>
-                  )
-                })}
-              </div>
+                    <button
+                      className="niko-delete-btn"
+                      onClick={(e) => deleteChat(id, e)}
+                      title="Elimina conversazione"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                )
+              })}
             </div>
 
-            <div className="agents-section">
-              <h3 className="agents-title">AGENTI AI:</h3>
-              <div className="agents-list">
-                <Link href="/tony-ai" className="agent-item">
-                  <div className="agent-avatar">
+            <div className="niko-agents-section">
+              <h3 className="niko-agents-title">AGENTI AI:</h3>
+              <div className="niko-agents-list">
+                <Link href="/tony-ai" className="niko-agent-item">
+                  <div className="niko-agent-avatar">
                     <img
                       src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
                       alt="Tony"
                     />
                   </div>
-                  <span className="agent-name">Tony AI</span>
+                  <span className="niko-agent-name">Tony AI</span>
                 </Link>
-                <Link href="/aladino-ai" className="agent-item">
-                  <div className="agent-avatar">
+                <Link href="/aladino-ai" className="niko-agent-item">
+                  <div className="niko-agent-avatar">
                     <img
                       src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png"
                       alt="Aladino"
                     />
                   </div>
-                  <span className="agent-name">Aladdin AI</span>
+                  <span className="niko-agent-name">Aladdin AI</span>
                 </Link>
-                <Link href="/lara-ai" className="agent-item">
-                  <div className="agent-avatar">
+                <Link href="/lara-ai" className="niko-agent-item">
+                  <div className="niko-agent-avatar">
                     <img
                       src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png"
                       alt="Lara"
                     />
                   </div>
-                  <span className="agent-name">Lara AI</span>
+                  <span className="niko-agent-name">Lara AI</span>
                 </Link>
-                <Link href="/" className="agent-item">
-                  <div className="agent-avatar">
+                <Link href="/simone-ai" className="niko-agent-item">
+                  <div className="niko-agent-avatar">
                     <img
                       src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png"
                       alt="Simone"
                     />
                   </div>
-                  <span className="agent-name">Simone AI</span>
+                  <span className="niko-agent-name">Simone AI</span>
                 </Link>
-                <Link href="/" className="agent-item">
-                  <div className="agent-avatar">
+                <Link href="/" className="niko-agent-item">
+                  <div className="niko-agent-avatar">
                     <img
                       src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png"
                       alt="Mike"
                     />
                   </div>
-                  <span className="agent-name">Mike AI</span>
+                  <span className="niko-agent-name">Mike AI</span>
                 </Link>
-                <Link href="/" className="agent-item">
-                  <div className="agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/03/Valentina-AI-AI-SEO-optimizer.png"
-                      alt="Valentina"
-                    />
-                  </div>
-                  <span className="agent-name">Valentina AI</span>
-                </Link>
-                <Link href="/" className="agent-item">
-                  <div className="agent-avatar">
-                    <img src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI.png" alt="Niko" />
-                  </div>
-                  <span className="agent-name">Niko AI</span>
-                </Link>
-                <Link href="/" className="agent-item">
-                  <div className="agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Jim-AI-%E2%80%93-AI-Coach.png"
-                      alt="Jim"
-                    />
-                  </div>
-                  <span className="agent-name">Jim AI</span>
-                </Link>
-                <Link href="/daniele-ai" className="agent-item">
-                  <div className="agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2024/11/Gary-AI-SMMg-icon.png"
-                      alt="Daniele"
-                    />
-                  </div>
-                  <span className="agent-name">Daniele AI</span>
-                </Link>
-                <Link href="/alex-ai" className="agent-item">
-                  <div className="agent-avatar">
+                <Link href="/alex-ai" className="niko-agent-item">
+                  <div className="niko-agent-avatar">
                     <img
                       src="https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png"
                       alt="Alex"
                     />
                   </div>
-                  <span className="agent-name">Alex AI</span>
+                  <span className="niko-agent-name">Alex AI</span>
+                </Link>
+                <Link href="/daniele-ai" className="niko-agent-item">
+                  <div className="niko-agent-avatar">
+                    <img
+                      src="https://www.ai-scaleup.com/wp-content/uploads/2024/11/Gary-AI-SMMg-icon.png"
+                      alt="Daniele"
+                    />
+                  </div>
+                  <span className="niko-agent-name">Daniele AI</span>
                 </Link>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="chat-container">
-          <div className="chat-header">
-            <div className="header-left">
+        <div className="niko-chat-container">
+          <div className="niko-chat-header">
+            <div className="niko-header-left">
               <button
-                className="toggle-sidebar-btn"
-                onClick={() => setSidebarVisible(!sidebarVisible)}
+                className="niko-toggle-btn"
+                onClick={() => {
+                  setSidebarVisible(!sidebarVisible)
+                  localStorage.setItem("niko-ai-sidebar-visible", String(!sidebarVisible))
+                }}
                 title="Mostra/Nascondi conversazioni"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -1123,74 +1080,68 @@ export default function LaraAI() {
                   )}
                 </svg>
               </button>
-              <div className="chat-title">Lara AI - Social Media Manager</div>
+              <div className="niko-chat-title">Niko AI - SEO Manager</div>
             </div>
-            <div className="header-right">
-              <Link href="/" className="home-button" title="Home">
+            <div className="niko-header-right">
+              <Link href="/" className="niko-home-btn" title="Home">
                 <Home size={20} />
               </Link>
-              <div style={{ transform: "scale(1.2)" }}>
-                <UserButton
-                  appearance={{
-                    elements: {
-                      avatarBox: "w-10 h-10",
-                    },
-                  }}
-                />
-              </div>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-10 h-10",
+                  },
+                }}
+              />
             </div>
           </div>
 
-          <div className="chat-messages">
+          <div className="niko-messages">
             {messages.map((message, index) => (
-              <div key={index} className={`message ${message.sender}`}>
-                <div className="message-avatar">
-                  <img
-                    src={
-                      message.sender === "ai"
-                        ? "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png"
-                        : "https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
-                    }
-                    alt={message.sender === "ai" ? "Lara AI" : "User"}
-                  />
+              <div key={index} className={`niko-message ${message.sender}`}>
+                <div className="niko-message-avatar">
+                  {message.sender === "ai" ? (
+                    <img src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI.png" alt="Niko AI" />
+                  ) : (
+                    <img
+                      src="https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
+                      alt="User"
+                    />
+                  )}
                 </div>
-                <div className="message-content">
-                  <div className="message-text">
-                    {message.text ? (
-                      <div dangerouslySetInnerHTML={{ __html: formatMessageText(message.text) }} />
-                    ) : (
-                      <div className="thinking-dots">
+                <div className="niko-message-content">
+                  <div className="niko-message-text">
+                    {message.text === "" && message.time === "" ? (
+                      <div className="niko-thinking-dots">
                         <div className="dot"></div>
                         <div className="dot"></div>
                         <div className="dot"></div>
                       </div>
+                    ) : (
+                      <div dangerouslySetInnerHTML={{ __html: formatMessageText(message.text) }} />
                     )}
                   </div>
-                  {message.time && <div className="message-time">{message.time}</div>}
+                  {message.time && <div className="niko-message-time">{message.time}</div>}
                 </div>
               </div>
             ))}
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="input-container">
-            <div className="input-wrapper">
+          <div className="niko-input-container">
+            <div className="niko-input-wrapper">
               <textarea
                 ref={textareaRef}
-                className="message-input"
-                placeholder="Scrivi la tua domanda per Lara..."
-                rows={1}
+                className="niko-input"
+                placeholder="Scrivi la tua domanda per Niko..."
                 value={inputValue}
-                onChange={(e) => {
-                  setInputValue(e.target.value)
-                  e.target.style.height = "auto"
-                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
-                }}
+                onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
+                rows={1}
                 disabled={isLoading}
               />
               <button
-                className="send-button"
+                className="niko-send-btn"
                 onClick={sendMessage}
                 disabled={!inputValue.trim() || isLoading}
                 title="Invia (Invio)"
