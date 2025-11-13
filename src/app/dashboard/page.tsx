@@ -1,6 +1,8 @@
 import Image from "next/image"
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
+import { currentUser } from "@clerk/nextjs/server"
+import { UserButton } from "@clerk/nextjs"
 
 const agents = [
   {
@@ -65,13 +67,20 @@ const agents = [
   },
 ]
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await currentUser()
+
   return (
     <div className="min-h-screen bg-muted">
-      <div className="mx-auto w-[90%] max-w-7xl px-5 py-10">
+      <div className="mx-auto w-[90%] max-w-[1200px] px-5 py-10">
         {/* Header Section */}
-        <header className="mb-12 rounded-xl bg-[#235E84] px-5 py-8 text-center shadow-sm">
-          <h1 className="mb-2 font-sans text-4xl font-bold leading-tight text-white">
+        <header className="mb-12 rounded-xl bg-[#235E84] px-5 py-[30px] text-center shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_2px_4px_-1px_rgba(0,0,0,0.03)]">
+          {user && (
+            <div className="absolute right-5 top-5">
+              <UserButton />
+            </div>
+          )}
+          <h1 className="mb-2 font-sans text-[36px] font-bold leading-tight text-white">
             Incontra i nostri Specialisti AI
           </h1>
           <p className="text-lg text-white/90">Scegli un agente AI e avvia la conversazione con un clic.</p>
@@ -81,7 +90,7 @@ export default function HomePage() {
         <main className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {agents.map((agent) => (
             <Link key={agent.name} href={agent.href} className="group">
-              <Card className="overflow-hidden border border-border bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+              <Card className="overflow-hidden border border-border bg-card shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_2px_4px_-1px_rgba(0,0,0,0.03)] transition-all duration-300 hover:-translate-y-[5px] hover:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.07),0_4px_6px_-2px_rgba(0,0,0,0.04)]">
                 {/* Agent Avatar */}
                 <div className="relative aspect-[16/10] w-full overflow-hidden bg-white">
                   <Image
@@ -94,7 +103,7 @@ export default function HomePage() {
 
                 {/* Agent Info */}
                 <div className="p-6">
-                  <h3 className="mb-2 font-sans text-lg font-semibold text-card-foreground">{agent.name}</h3>
+                  <h3 className="mb-2 font-sans text-[20px] font-semibold text-card-foreground">{agent.name}</h3>
                   <p className="text-sm text-muted-foreground">{agent.role}</p>
                 </div>
               </Card>

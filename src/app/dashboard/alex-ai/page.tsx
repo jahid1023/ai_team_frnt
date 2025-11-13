@@ -201,7 +201,7 @@ export default function AlexAIPage() {
     if (ext === "pdf") {
       try {
         const pdfjsLib = await import("pdfjs-dist")
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
         const pdf = await pdfjsLib.getDocument({ data: ab }).promise
         let fullText = ""
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -209,6 +209,7 @@ export default function AlexAIPage() {
           const content = await page.getTextContent()
           fullText += content.items.map((item: any) => item.str).join(" ") + "\n\n"
         }
+        console.log("[v0] PDF parsed successfully, text length:", fullText.length)
         return cleanText(fullText)
       } catch (error) {
         console.error("[v0] PDF parsing error:", error)

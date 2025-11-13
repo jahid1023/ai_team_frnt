@@ -247,11 +247,12 @@ export default function MikeAIChat() {
 
   async function parsePDF(buf: ArrayBuffer): Promise<string> {
     try {
-      // Dynamic import for pdfjs-dist
       const pdfjsLib = await import("pdfjs-dist")
 
-      // Set worker src to CDN
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+      // Use unpkg CDN for worker to avoid bundling issues
+      if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
+      }
 
       const loadingTask = pdfjsLib.getDocument({ data: buf })
       const pdf = await loadingTask.promise
@@ -274,7 +275,6 @@ export default function MikeAIChat() {
 
   async function parseDOCX(buf: ArrayBuffer): Promise<string> {
     try {
-      // Dynamic import for mammoth
       const mammoth = await import("mammoth")
       const result = await mammoth.extractRawText({ arrayBuffer: buf })
       console.log("[v0] DOCX parsed successfully, text length:", result.value.length)
@@ -287,7 +287,6 @@ export default function MikeAIChat() {
 
   async function parseXLSX(buf: ArrayBuffer): Promise<string> {
     try {
-      // Dynamic import for xlsx
       const XLSX = await import("xlsx")
       const workbook = XLSX.read(buf, { type: "array" })
       let allText = ""
